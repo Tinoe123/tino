@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Primary Schools Dashboard</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      display: flex;
+      background-color: #f4f6f8;
+    }
+    #sidebar {
+      width: 300px;
+      background: #ffffff;
+      padding: 15px;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+    #map {
+      flex: 1;
+      height: 100vh;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    h3 {
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+    #loading {
+      display: none;
+      text-align: center;
+      margin-top: 10px;
+      color: #0078d4;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h3>Primary Schools Dashboard</h3>
+    <input type="text" id="searchBox" placeholder="Search school name..." />
+    <select id="districtSelect">
+      <option value="">Select District</option>
+      <option value="Harare">Harare</option>
+      <option value="Bulawayo">Bulawayo</option>
+      <option value="Mutare">Mutare</option>
+    </select>
+    <div id="loading">Loading map data...</div>
+  </div>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+  <script>
+    // Initialize map
+    var map = L.map('map').setView([-19.0, 30.0], 6);
+
+    // Add basemap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Add geocoder for place search
+    L.Control.geocoder({
+      defaultMarkGeocode: true
+    }).addTo(map);
+
+    // Show loading indicator
+    document.getElementById('loading').style.display = 'block';
+
+    // Load school data
+    fetch('Primary schools.geojson')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('loading').style.display = 'none';
+        var schoolLayer = L.geoJSON(data, {
+          pointToLayer: function(feature, latlng) {
+            return L.marker(latlng).bindPopup(
+              `<b>${feature.properties.name}</b><br>${feature.properties.district}`
+            );
+          }
+        }).addTo(map);
+
+        // Search by school name
+        document.getElementById('searchBox').addEventListener('input', function(e) {
+          var query = e.target.value.toLowerCase();
+          map.eachLayer(function(layer) {
+            if (layer instanceof L.Marker) map.removeLayer(layer);
+          });
+          var filtered = data.features.filter(f => f.properties.name.toLowerCase().includes(query));
+          L.geoJSON({type: 'FeatureCollection', features: filtered}, {
+            pointToLayer: function(feature, latlng) {
+              return L.marker(latlng).bindPopup(
+                `<b>${feature.properties.name}</b><br>${feature.properties.district}`
+              );
+            }
+          }).addTo(map);
+        });
+
+        // Filter by district
+        document.getElementById('districtSelect').addEventListener('change', function(e) {
+          var district = e.target.value;
+          map.eachLayer(function(layer) {
+            if (layer instanceof L.Marker) map.removeLayer(layer);
+          });
+          if (district) {
+            var filtered = data.features.filter(f => f.properties.district === district);
+            var layer = L.geoJSON({type: 'FeatureCollection', features: filtered}, {
+              pointToLayer: function(feature, latlng) {
+                return L.marker(latlng).bindPopup(
+                  `<b>${feature.properties.name}</b><br>${feature.properties.district}`
+                );
+              }
+            }).addTo(map);
+            if (filtered.length > 0) map.fitBounds(layer.getBounds());
+          } else {
+            L.geoJSON(data, {
+              pointToLayer: function(feature, latlng) {
+                return L.marker(latlng).bindPopup(
+                  `<b>${feature.properties.name}</b><br>${feature.properties.district}`
+                );
+              }
+            }).addTo(map);
+            map.setView([-19.0, 30.0], 6);
+          }
+        });
+      });
+
+    // Load administrative boundaries
+    fetch('boundaries.geojson')
+      .then(response => response.json())
+      .then(boundaries => {
+        L.geoJSON(boundaries, {
+          style: {
+            color: '#555',
+            weight: 1,
+            fillOpacity: 0
+          }
+        }).addTo(map);
+      });
+  </script>
+</body>
+</html>
